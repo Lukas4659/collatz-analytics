@@ -39,7 +39,7 @@ class CollatzApp(ctk.CTk):
         super().__init__()
 
         # 1. Window Setup
-        self.title("Collatz Analytics System v2.1")
+        self.title("Collatz Analytics System v2.2")
         self.geometry("1200x850")
         self.iconbitmap(self.resource_path("ikona.ico"))
 
@@ -52,6 +52,7 @@ class CollatzApp(ctk.CTk):
         self.raw_sequences = []  # Raw sequences for line plots
 
         self.sort_descending = False  # Toggle for sorting
+        self.last_sorted_col = None  # To track which column was last sorted
 
         # 2. Sidebar
         self.sidebar_frame = ctk.CTkFrame(self, width=250, corner_radius=0)
@@ -134,17 +135,14 @@ class CollatzApp(ctk.CTk):
         self.btn_load_csv.pack(padx=20, pady=10)
 
         # --- BOTTOM CREDITS & EASTER EGG ---
-        # Using a frame at the bottom to hold these
         self.bottom_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
         self.bottom_frame.pack(side="bottom", fill="x", pady=20)
 
-        # Metadata
         self.lbl_credits = ctk.CTkLabel(self.bottom_frame,
-                                        text="Ver: 2.1 | Year: 2026\nAuthor: Lukas4659",
+                                        text="Ver: 2.2 | Year: 2026\nAuthor: Lukas4659",
                                         font=("Arial", 10), text_color="gray60")
         self.lbl_credits.pack(pady=(0, 5))
 
-        # Easter Egg
         self.lbl_ptys = ctk.CTkLabel(self.bottom_frame, text="Ptyś",
                                      text_color="gray30", font=("Arial", 10, "italic"), cursor="hand2")
         self.lbl_ptys.pack()
@@ -202,47 +200,47 @@ class CollatzApp(ctk.CTk):
         self.table_frame.grid_rowconfigure(0, weight=1)
         self.table_frame.grid_columnconfigure(0, weight=1)
 
-        # Treeview setup
         self.tree_scroll_y = ttk.Scrollbar(self.table_frame)
         self.tree_scroll_y.pack(side="right", fill="y")
 
-        columns = ("Start", "Length", "Max_Value", "Average", "Median", "Glide_Time", "Parity_Even_Pct")
-        self.tree = ttk.Treeview(self.table_frame, columns=columns, show="headings",
+        # Define columns explicitly as class attribute for easier access
+        self.table_columns = ("Start", "Length", "Max_Value", "Average", "Median", "Glide_Time", "Parity_Even_Pct")
+
+        self.tree = ttk.Treeview(self.table_frame, columns=self.table_columns, show="headings",
                                  yscrollcommand=self.tree_scroll_y.set)
 
         self.tree_scroll_y.config(command=self.tree.yview)
         self.tree.pack(fill="both", expand=True)
 
         # Bind Headers for Sorting
-        for col in columns:
+        for col in self.table_columns:
             self.tree.heading(col, text=col, command=lambda c=col: self.sort_data_by_column(c))
             self.tree.column(col, width=90, anchor="center")
 
     # --- EASTER EGG ---
     def open_easter_egg(self, event):
         try:
-            img_path = self.resource_path("Ptys.png")
+            # Note: Changed to jpg as requested, but keeping generic check
+            img_path = self.resource_path("Ptys.jpg")
+            if not os.path.exists(img_path):
+                # Fallback check for png just in case
+                img_path = self.resource_path("Ptys.png")
+
             if not os.path.exists(img_path):
                 messagebox.showerror("Error", "Ptyś image not found!")
                 return
 
-            # Create a Toplevel window (popup)
             top = ctk.CTkToplevel(self)
             top.title("Ptyś")
             top.geometry("600x600")
-
-            # Make it focus
             top.attributes('-topmost', True)
 
-            # Load and display image
             pil_img = Image.open(img_path)
-            # Resize nicely to window
             pil_img = pil_img.resize((580, 580), Image.Resampling.LANCZOS)
-
             tk_img = ImageTk.PhotoImage(pil_img)
 
             lbl = tk.Label(top, image=tk_img, bg="black")
-            lbl.image = tk_img  # Keep reference
+            lbl.image = tk_img
             lbl.pack(fill="both", expand=True)
 
         except Exception as e:
@@ -269,14 +267,11 @@ class CollatzApp(ctk.CTk):
             def progress_update(current, total):
                 self.progress_bar.set(current / total)
 
-            # 1. Generate Raw Sequences
             self.raw_sequences = ct.calculate_all_sequences(start, end, progress_callback=progress_update)
 
-            # 2. Analyze Stats
             print("Status: Calculating statistics...")
             self.full_stats_data = ct.analyze_sequence_dataset(self.raw_sequences)
 
-            # 3. Initialize Display Data (Show All initially)
             self.current_display_data = self.full_stats_data.copy()
 
             self.after(0, self.on_generation_complete)
@@ -293,16 +288,12 @@ class CollatzApp(ctk.CTk):
     # --- LOGIC: TABLE & FILTERING ---
 
     def refresh_table(self):
-        """ Clears and refills table with self.current_display_data """
-        # Clear
         for i in self.tree.get_children():
             self.tree.delete(i)
 
-        # Update Count Label
         count = len(self.current_display_data)
         self.lbl_count.configure(text=f"Rows: {count}")
 
-        # Limit display for performance if huge, but let's try displaying all (Treeview can handle ~10k okay)
         limit = 5000
         if count > limit:
             print(f"Displaying first {limit} rows (total {count}) to prevent lag...")
@@ -314,12 +305,29 @@ class CollatzApp(ctk.CTk):
             self.tree.insert("", "end", values=vals)
 
     def sort_data_by_column(self, col_name):
-        """ Sorts the currently displayed list by the chosen column """
-        print(f"Sorting by {col_name}...")
+        """ Sorts data and updates header arrows """
 
-        # Toggle sort order
-        self.sort_descending = not self.sort_descending
+        # If we click the SAME column, flip the order.
+        # If we click a NEW column, start with Ascending (False).
+        if self.last_sorted_col == col_name:
+            self.sort_descending = not self.sort_descending
+        else:
+            self.sort_descending = False  # Default to ascending for new col
+            self.last_sorted_col = col_name
 
+        print(f"Sorting by {col_name} ({'DESC' if self.sort_descending else 'ASC'})...")
+
+        # 1. Update Headers (Add/Remove Arrows)
+        for col in self.table_columns:
+            if col == col_name:
+                # Add arrow to the active column
+                arrow = "▼" if self.sort_descending else "▲"
+                self.tree.heading(col, text=f"{col} {arrow}")
+            else:
+                # Clear arrow from other columns
+                self.tree.heading(col, text=col)
+
+        # 2. Sort Data
         try:
             self.current_display_data.sort(
                 key=lambda x: x[col_name],
@@ -330,7 +338,6 @@ class CollatzApp(ctk.CTk):
             print(f"Error sorting by {col_name}")
 
     def apply_filter(self):
-        """ Filters full_stats_data based on UI input """
         col = self.combo_col.get()
         op = self.combo_op.get()
         val_str = self.entry_val.get()
@@ -346,7 +353,6 @@ class CollatzApp(ctk.CTk):
             new_data = []
             for row in self.full_stats_data:
                 row_val = row[col]
-
                 match = False
                 if op == ">":
                     match = row_val > val
@@ -371,6 +377,11 @@ class CollatzApp(ctk.CTk):
         self.current_display_data = self.full_stats_data.copy()
         self.refresh_table()
 
+        # Reset headers text (optional, but clean)
+        for col in self.table_columns:
+            self.tree.heading(col, text=col)
+        self.last_sorted_col = None
+
     # --- VISUALIZATION ---
     def show_stats_dashboard(self):
         if not self.current_display_data:
@@ -378,25 +389,15 @@ class CollatzApp(ctk.CTk):
             return
 
         print(f"Opening Stats Dashboard for {len(self.current_display_data)} records...")
-        # Note: We pass current_display_data (filtered)
         ct.plot_graph(self.current_display_data, in_window=True)
 
     def show_trajectory_plot(self):
-        # NOTE: If we filtered stats, we ideally want to filter raw_sequences too.
-        # But connecting filtered stats back to raw sequences is complex if we didn't keep IDs.
-        # For this version, Trajectories will show ALL sequences, or we can try to filter.
-
         if not self.raw_sequences:
             messagebox.showwarning("No Data", "No raw sequences available.")
             return
 
-        # Simple check: If filter is active (count diff), let user know
         if len(self.current_display_data) != len(self.full_stats_data):
-            print("Note: Trajectory plot currently shows ALL generated sequences, regardless of filter.")
-            # Advanced implementation would require filtering raw_sequences based on 'Start' in current_display_data
-            # Let's do that for extra points!
-
-            print("Attempting to filter trajectories to match table...")
+            print("Note: Filtering trajectories based on table results...")
             allowed_starts = set(row['Start'] for row in self.current_display_data)
             filtered_seqs = [seq for seq in self.raw_sequences if seq[0] in allowed_starts]
             ct.plot_graph(filtered_seqs, in_window=True)
@@ -413,13 +414,11 @@ class CollatzApp(ctk.CTk):
 
     def _load_thread(self, filename):
         try:
-            # Assuming stats file for simplicity in this context, or implementing detection
-            # Let's try to load as stats first
             stats = ct.read_stats_from_file(filename)
             if stats:
                 self.full_stats_data = stats
                 self.current_display_data = stats.copy()
-                self.raw_sequences = []  # Clear raw if loading stats only
+                self.raw_sequences = []
                 self.after(0, self.on_generation_complete)
             else:
                 print("Could not load stats. Trying as sequences...")
@@ -436,4 +435,3 @@ class CollatzApp(ctk.CTk):
 if __name__ == "__main__":
     app = CollatzApp()
     app.mainloop()
-
