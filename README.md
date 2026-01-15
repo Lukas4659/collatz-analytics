@@ -1,4 +1,4 @@
-# Collatz Analytics System v2.1 📉
+# Collatz Analytics System v2.8 📉
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
