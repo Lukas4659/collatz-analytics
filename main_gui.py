@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, filedialog
 import threading
 import os
 import sys
+import time  # <--- NEW IMPORT
 from PIL import Image, ImageTk
 
 # Import our backend tools
@@ -39,8 +40,8 @@ class CollatzApp(ctk.CTk):
         super().__init__()
 
         # 1. Window Setup
-        self.title("Collatz Analytics System v2.6")  # Version bump
-        self.geometry("1200x950")  # Increased height slightly for 3rd filter
+        self.title("Collatz Analytics System v2.7")  # Version bump
+        self.geometry("1200x950")
         self.iconbitmap(self.resource_path("ikona.ico"))
 
         self.grid_columnconfigure(1, weight=1)
@@ -148,7 +149,7 @@ class CollatzApp(ctk.CTk):
         self.bottom_frame.pack(side="bottom", fill="x", pady=20)
 
         self.lbl_credits = ctk.CTkLabel(self.bottom_frame,
-                                        text="Ver: 2.6 | Year: 2026\nAuthor: Lukas4659",
+                                        text="Ver: 2.7 | Year: 2026\nAuthor: Lukas4659",
                                         font=("Arial", 10), text_color="gray60")
         self.lbl_credits.pack(pady=(0, 5))
 
@@ -163,28 +164,34 @@ class CollatzApp(ctk.CTk):
                                        font=ctk.CTkFont(size=18, weight="bold"))
         self.lbl_header.grid(row=0, column=0, sticky="w", padx=20, pady=(20, 5))
 
-        # Progress
-        self.progress_bar = ctk.CTkProgressBar(self.main_frame)
-        self.progress_bar.grid(row=1, column=0, sticky="ew", padx=20, pady=5)
+        # --- PROGRESS AREA (Modified) ---
+        # Container frame for Bar + ETA Label
+        self.progress_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.progress_frame.grid(row=1, column=0, sticky="ew", padx=20, pady=5)
+
+        self.progress_bar = ctk.CTkProgressBar(self.progress_frame)
+        self.progress_bar.pack(fill="x", pady=(0, 2))
         self.progress_bar.set(0)
+
+        # ETA Label (Small, right-aligned)
+        self.lbl_eta = ctk.CTkLabel(self.progress_frame, text="Time Remaining: --:--",
+                                    font=ctk.CTkFont(size=11), text_color="gray70")
+        self.lbl_eta.pack(anchor="e")  # Anchor East (Right)
 
         # Logs
         self.log_box = ctk.CTkTextbox(self.main_frame, width=600, height=150, state="disabled", font=("Consolas", 12))
         self.log_box.grid(row=2, column=0, sticky="nsew", padx=20, pady=10)
 
         # --- ADVANCED FILTERING PANEL ---
-        # Spanning both columns
         self.data_mgmt_frame = ctk.CTkFrame(self.main_frame)
         self.data_mgmt_frame.grid(row=3, column=0, columnspan=2, sticky="ew", padx=20, pady=(10, 0))
 
-        # We will create 3 rows of filters
         self.create_filter_row(row_idx=0, label_text="Filter 1:")
         self.create_filter_row(row_idx=1, label_text="Filter 2 (Nested):")
-        self.create_filter_row(row_idx=2, label_text="Filter 3 (Nested):")  # Added 3rd row
+        self.create_filter_row(row_idx=2, label_text="Filter 3 (Nested):")
 
-        # Apply / Reset Buttons (Right side, spanning rows)
+        # Apply / Reset Buttons
         btn_frame = ctk.CTkFrame(self.data_mgmt_frame, fg_color="transparent")
-        # Changed rowspan to 3 to cover all filter rows
         btn_frame.grid(row=0, column=5, rowspan=3, padx=20, pady=5, sticky="ns")
 
         self.btn_filter = ctk.CTkButton(btn_frame, text="Apply Filters", width=120, height=40,
@@ -222,31 +229,25 @@ class CollatzApp(ctk.CTk):
 
     def create_filter_row(self, row_idx, label_text):
         """ Helper to build a standardized filter row """
-
         lbl = ctk.CTkLabel(self.data_mgmt_frame, text=label_text, font=ctk.CTkFont(weight="bold"))
         lbl.grid(row=row_idx, column=0, padx=10, pady=5, sticky="w")
 
-        # Column Select
         combo_col = ctk.CTkComboBox(self.data_mgmt_frame,
                                     values=["Start", "Length", "Max_Value", "Glide_Time", "Parity_Even_Pct"], width=130)
         combo_col.grid(row=row_idx, column=1, padx=5, pady=5)
         combo_col.set("Max_Value")
 
-        # Operator Select
         combo_op = ctk.CTkComboBox(self.data_mgmt_frame, values=[">", "<", "=", "Range"], width=80)
         combo_op.grid(row=row_idx, column=2, padx=5, pady=5)
         combo_op.set(">")
 
-        # Entry 1 (Value or Min)
         entry1 = ctk.CTkEntry(self.data_mgmt_frame, placeholder_text="Val / Min", width=100)
         entry1.grid(row=row_idx, column=3, padx=5, pady=5)
 
-        # Entry 2 (Max) - Initially disabled
         entry2 = ctk.CTkEntry(self.data_mgmt_frame, placeholder_text="Max", width=100)
         entry2.grid(row=row_idx, column=4, padx=5, pady=5)
         entry2.configure(state="disabled", fg_color="gray25")
 
-        # Add trace/command to enable Entry 2 only when "Range" is selected
         def on_op_change(choice):
             if choice == "Range":
                 entry2.configure(state="normal", fg_color=["#F9F9FA", "#343638"])
@@ -256,7 +257,6 @@ class CollatzApp(ctk.CTk):
 
         combo_op.configure(command=on_op_change)
 
-        # Store widgets for logic
         self.filter_rows.append({
             "col": combo_col,
             "op": combo_op,
@@ -298,6 +298,7 @@ class CollatzApp(ctk.CTk):
             if s <= 0 or e <= 0: raise ValueError
             self.btn_generate.configure(state="disabled")
             self.progress_bar.set(0)
+            self.lbl_eta.configure(text="Calculating ETA...")  # Reset text
             threading.Thread(target=self.run_generation_process, args=(s, e), daemon=True).start()
         except ValueError:
             messagebox.showerror("Error", "Invalid integers.")
@@ -305,8 +306,43 @@ class CollatzApp(ctk.CTk):
     def run_generation_process(self, start, end):
         try:
             print(f"\n>>> Generating {start}-{end}...")
-            cb = lambda c, t: self.progress_bar.set(c / t)
-            self.raw_sequences = ct.calculate_all_sequences(start, end, progress_callback=cb)
+
+            # --- ETA LOGIC START ---
+            start_time = time.time()
+            total_items = end - start + 1
+
+            def progress_update(current, total):
+                # Update bar
+                self.progress_bar.set(current / total)
+
+                # Calculate ETA (only every ~50 items to save resources, or if it's the end)
+                # Since 'current' is simple counter, let's update frequently but safely.
+                # collatz_tools updates every 100 items by default, so we are safe to do math here.
+
+                elapsed = time.time() - start_time
+                if elapsed > 0 and current > 0:
+                    rate = current / elapsed  # items per second
+                    remaining_items = total - current
+                    eta_seconds = remaining_items / rate
+
+                    # Format time MM:SS
+                    mins, secs = divmod(int(eta_seconds), 60)
+                    if mins > 60:
+                        hrs, mins = divmod(mins, 60)
+                        time_str = f"{hrs}h {mins}m {secs}s"
+                    else:
+                        time_str = f"{mins:02d}:{secs:02d}"
+
+                    # Update label via main thread safety not strictly required for simple config,
+                    # but good practice. Since we use threading, we should be careful.
+                    # Tkinter is not thread-safe, but configure() usually works.
+                    # Ideally: self.after(0, ...) but let's try direct update as CustomTkinter handles some of this.
+                    if current % 10 == 0:  # Update text less frequently than bar
+                        self.lbl_eta.configure(text=f"ETA: {time_str} ({int(rate)} seq/s)")
+
+            # --- ETA LOGIC END ---
+
+            self.raw_sequences = ct.calculate_all_sequences(start, end, progress_callback=progress_update)
             print("Status: Calculating statistics...")
             self.full_stats_data = ct.analyze_sequence_dataset(self.raw_sequences)
             self.current_display_data = self.full_stats_data.copy()
@@ -317,6 +353,7 @@ class CollatzApp(ctk.CTk):
 
     def on_generation_complete(self):
         self.btn_generate.configure(state="normal")
+        self.lbl_eta.configure(text="Status: Completed")
         self.refresh_table()
         print(f">>> Done. {len(self.current_display_data)} records.")
         messagebox.showinfo("Success", "Data ready!")
@@ -350,22 +387,15 @@ class CollatzApp(ctk.CTk):
         self.refresh_table()
 
     def apply_advanced_filters(self):
-        """ Applies all active filters sequentially """
         if not self.full_stats_data: return
-
-        # Start with full dataset
         dataset = self.full_stats_data.copy()
-
-        # Iterate through filter rows
         for i, f_row in enumerate(self.filter_rows):
             col = f_row["col"].get()
             op = f_row["op"].get()
             val1_str = f_row["val1"].get()
             val2_str = f_row["val2"].get()
 
-            # Skip empty filters
-            if not val1_str:
-                continue
+            if not val1_str: continue
 
             try:
                 val1 = float(val1_str)
@@ -375,7 +405,6 @@ class CollatzApp(ctk.CTk):
                 for row in dataset:
                     row_val = row[col]
                     match = False
-
                     if op == ">":
                         match = row_val > val1
                     elif op == "<":
@@ -384,17 +413,12 @@ class CollatzApp(ctk.CTk):
                         match = row_val == val1
                     elif op == "Range":
                         if not val2_str:
-                            print(f"Warning: Filter {i + 1} (Range) missing Max value. Skipping.")
                             match = True
                         else:
-                            val2 = float(val2_str)
-                            match = val1 <= row_val <= val2
+                            match = val1 <= row_val <= float(val2_str)
 
-                    if match:
-                        filtered_subset.append(row)
-
-                dataset = filtered_subset  # Update dataset for next filter pass
-
+                    if match: filtered_subset.append(row)
+                dataset = filtered_subset
             except ValueError:
                 messagebox.showerror("Filter Error", f"Invalid number in Filter {i + 1}")
                 return
