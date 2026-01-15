@@ -29,9 +29,9 @@ The application calculates detailed metrics for every sequence:
 2. **Stats Dashboard**: A 3x3 grid of scatter plots revealing correlations (e.g., *Start Number* vs. *Glide Time*). Note: The dashboard updates dynamically based on the filtered table data!
 
 ### 📸 Screenshots
-![Screenshot](screenshot1.png)
+![Screenshot](screenshot_1.png)
 
-![Screenshot](screenshot2.png)
+![Screenshot](screenshot_2.png)
 
 ---
 
