@@ -7,6 +7,7 @@ progress bar generation, and rendering of advanced correlation charts.
 """
 
 import csv
+
 import statistics
 import tkinter as tk
 from itertools import zip_longest
