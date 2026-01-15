@@ -39,7 +39,7 @@ class CollatzApp(ctk.CTk):
         super().__init__()
 
         # 1. Window Setup
-        self.title("Collatz Analytics System v2.2")
+        self.title("Collatz Analytics System v2.4")
         self.geometry("1200x850")
         self.iconbitmap(self.resource_path("ikona.ico"))
 
@@ -134,12 +134,17 @@ class CollatzApp(ctk.CTk):
         self.btn_load_csv = ctk.CTkButton(self.sidebar_frame, text="Load External CSV", command=self.load_from_file)
         self.btn_load_csv.pack(padx=20, pady=10)
 
-        # --- BOTTOM CREDITS & EASTER EGG ---
+        # --- EASTER EGG CONTAINER (SIDEBAR) ---
+        # This is an empty frame that will hold the image when triggered
+        self.easter_egg_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        self.easter_egg_frame.pack(padx=20, pady=10, fill="x")
+
+        # --- BOTTOM CREDITS & EASTER EGG TRIGGER ---
         self.bottom_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
         self.bottom_frame.pack(side="bottom", fill="x", pady=20)
 
         self.lbl_credits = ctk.CTkLabel(self.bottom_frame,
-                                        text="Ver: 2.2 | Year: 2026\nAuthor: Lukas4659",
+                                        text="Ver: 2.4 | Year: 2026\nAuthor: Lukas4659",
                                         font=("Arial", 10), text_color="gray60")
         self.lbl_credits.pack(pady=(0, 5))
 
@@ -203,7 +208,6 @@ class CollatzApp(ctk.CTk):
         self.tree_scroll_y = ttk.Scrollbar(self.table_frame)
         self.tree_scroll_y.pack(side="right", fill="y")
 
-        # Define columns explicitly as class attribute for easier access
         self.table_columns = ("Start", "Length", "Max_Value", "Average", "Median", "Glide_Time", "Parity_Even_Pct")
 
         self.tree = ttk.Treeview(self.table_frame, columns=self.table_columns, show="headings",
@@ -217,34 +221,50 @@ class CollatzApp(ctk.CTk):
             self.tree.heading(col, text=col, command=lambda c=col: self.sort_data_by_column(c))
             self.tree.column(col, width=90, anchor="center")
 
-    # --- EASTER EGG ---
+    # --- EASTER EGG LOGIC ---
     def open_easter_egg(self, event):
+        # 1. Check if already open (if frame has children widgets)
+        if self.easter_egg_frame.winfo_children():
+            return
+
         try:
-            # Note: Changed to jpg as requested, but keeping generic check
             img_path = self.resource_path("Ptys.jpg")
             if not os.path.exists(img_path):
-                # Fallback check for png just in case
                 img_path = self.resource_path("Ptys.png")
 
             if not os.path.exists(img_path):
                 messagebox.showerror("Error", "Ptyś image not found!")
                 return
 
-            top = ctk.CTkToplevel(self)
-            top.title("Ptyś")
-            top.geometry("600x600")
-            top.attributes('-topmost', True)
-
+            # 2. Load and Resize Image to fit sidebar
             pil_img = Image.open(img_path)
-            pil_img = pil_img.resize((580, 580), Image.Resampling.LANCZOS)
-            tk_img = ImageTk.PhotoImage(pil_img)
+            # Sidebar is ~250px wide. Let's target 210px width for image and calculate height.
+            target_width = 210
+            width_percent = (target_width / float(pil_img.size[0]))
+            target_height = int((float(pil_img.size[1]) * float(width_percent)))
 
-            lbl = tk.Label(top, image=tk_img, bg="black")
-            lbl.image = tk_img
-            lbl.pack(fill="both", expand=True)
+            # Use CTkImage for better scaling in CustomTkinter
+            my_image = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(target_width, target_height))
+
+            # 3. Create Close Button
+            # Using a small red button positioned to the right
+            btn_close = ctk.CTkButton(self.easter_egg_frame, text="Close ✕", width=60, height=20,
+                                      fg_color="#c9302c", hover_color="#a82824",  # Red colors
+                                      font=ctk.CTkFont(size=11),
+                                      command=self.close_easter_egg)
+            btn_close.pack(anchor="e", pady=(0, 5))  # Anchor east (right)
+
+            # 4. Create and pack the image label inside the container frame
+            lbl_img = ctk.CTkLabel(self.easter_egg_frame, image=my_image, text="")
+            lbl_img.pack()
 
         except Exception as e:
             print(f"Easter egg broken: {e}")
+
+    def close_easter_egg(self):
+        """ Clears the easter egg frame, effectively hiding the image """
+        for widget in self.easter_egg_frame.winfo_children():
+            widget.destroy()
 
     # --- LOGIC: GENERATION ---
     def start_generation_thread(self):
@@ -305,29 +325,21 @@ class CollatzApp(ctk.CTk):
             self.tree.insert("", "end", values=vals)
 
     def sort_data_by_column(self, col_name):
-        """ Sorts data and updates header arrows """
-
-        # If we click the SAME column, flip the order.
-        # If we click a NEW column, start with Ascending (False).
         if self.last_sorted_col == col_name:
             self.sort_descending = not self.sort_descending
         else:
-            self.sort_descending = False  # Default to ascending for new col
+            self.sort_descending = False
             self.last_sorted_col = col_name
 
         print(f"Sorting by {col_name} ({'DESC' if self.sort_descending else 'ASC'})...")
 
-        # 1. Update Headers (Add/Remove Arrows)
         for col in self.table_columns:
             if col == col_name:
-                # Add arrow to the active column
                 arrow = "▼" if self.sort_descending else "▲"
                 self.tree.heading(col, text=f"{col} {arrow}")
             else:
-                # Clear arrow from other columns
                 self.tree.heading(col, text=col)
 
-        # 2. Sort Data
         try:
             self.current_display_data.sort(
                 key=lambda x: x[col_name],
@@ -377,7 +389,6 @@ class CollatzApp(ctk.CTk):
         self.current_display_data = self.full_stats_data.copy()
         self.refresh_table()
 
-        # Reset headers text (optional, but clean)
         for col in self.table_columns:
             self.tree.heading(col, text=col)
         self.last_sorted_col = None
