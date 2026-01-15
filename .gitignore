@@ -18,3 +18,12 @@ docs/
 .idea/
 .vscode/
 .DS_Store
+
+# Build artifacts (PyInstaller)
+build/
+dist/
+*.spec
+
+# Cache i IDE
+__pycache__/
+.idea/
