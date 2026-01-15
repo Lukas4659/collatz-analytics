@@ -1,4 +1,4 @@
-# Ignoruj środowiska wirtualne (To tu siedzi TeX!)
+# Ignoruj środowiska wirtualne 
 venv/
 .venv/
 env/
@@ -10,7 +10,7 @@ Scripts/
 __pycache__/
 *.pyc
 
-# Ignoruj pliki wygenerowane przez dokumentację (Twoje HTML)
+# Ignoruj pliki wygenerowane przez dokumentację 
 html/
 docs/
 
